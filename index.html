@@ -5,155 +5,186 @@
   <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no, viewport-fit=cover">
   <meta name="apple-mobile-web-app-capable" content="yes">
   <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
-  <title>DarbLink | مسار السائق</title>
-  
+  <title>DarbLink | منظومة قيادة الطريق</title>
+
   <!-- Leaflet Map CSS -->
   <link rel="stylesheet" href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css" />
   
   <style>
     :root {
-      --bg: #07090e;
-      --card-bg: rgba(18, 24, 38, 0.85);
+      --bg-dark: #07090e;
+      --card-bg: rgba(18, 24, 38, 0.88);
+      --card-solid: #121826;
       --accent: #0284c7;
-      --accent-glow: rgba(2, 132, 199, 0.4);
+      --accent-glow: rgba(2, 132, 199, 0.45);
       --danger: #ef4444;
-      --danger-glow: rgba(239, 68, 68, 0.5);
+      --danger-glow: rgba(239, 68, 68, 0.55);
+      --warning: #f59e0b;
+      --success: #10b981;
       --text: #f8fafc;
-      --text-muted: #64748b;
+      --text-muted: #94a3b8;
+      --border: rgba(255, 255, 255, 0.09);
     }
 
-    * { box-sizing: border-box; margin: 0; padding: 0; user-select: none; -webkit-user-select: none; font-family: -apple-system, BlinkMacSystemFont, "SF Pro Display", Roboto, sans-serif; }
-    
+    * {
+      box-sizing: border-box;
+      margin: 0;
+      padding: 0;
+      user-select: none;
+      -webkit-user-select: none;
+      font-family: -apple-system, BlinkMacSystemFont, "SF Pro Display", "Segoe UI", Roboto, sans-serif;
+    }
+
     body {
-      background: var(--bg);
+      background: var(--bg-dark);
       color: var(--text);
       height: 100vh;
       overflow: hidden;
       display: flex;
       flex-direction: column;
-      justify-content: space-between;
-      position: relative;
     }
 
-    /* خلفية الخريطة الحية */
+    /* الحاويات والشاشات */
+    .app-screen {
+      display: none;
+      height: calc(100vh - 75px);
+      width: 100%;
+      position: absolute;
+      top: 0;
+      left: 0;
+      overflow-y: auto;
+      padding: env(safe-area-inset-top, 20px) 16px 20px 16px;
+    }
+
+    .app-screen.active {
+      display: flex;
+      flex-direction: column;
+    }
+
+    /* ===================================
+       1. شاشة الرادار والملاحة (HUD)
+       =================================== */
+    #screen-radar {
+      padding: 0;
+      overflow: hidden;
+      justify-content: space-between;
+    }
+
     #map {
       position: absolute;
       top: 0;
       left: 0;
       width: 100%;
-      height: 100%;
+      height: calc(100vh - 75px);
       z-index: 1;
-      filter: brightness(0.6) invert(1) contrast(3) hue-rotate(200deg) saturate(0.3);
+      filter: brightness(0.55) invert(1) contrast(3) hue-rotate(200deg) saturate(0.2);
     }
 
-    /* واجهة القيادة الشفافة العلوية */
-    .hud-overlay {
+    .hud-header {
       position: relative;
       z-index: 2;
-      padding: env(safe-area-inset-top, 20px) 16px 0 16px;
+      padding: calc(env(safe-area-inset-top, 16px) + 12px) 16px 0 16px;
       pointer-events: none;
     }
 
-    .top-panel {
+    .hud-card {
       pointer-events: auto;
       background: var(--card-bg);
-      backdrop-filter: blur(20px);
-      -webkit-backdrop-filter: blur(20px);
-      border: 1px solid rgba(255, 255, 255, 0.08);
+      backdrop-filter: blur(24px);
+      -webkit-backdrop-filter: blur(24px);
+      border: 1px solid var(--border);
       border-radius: 20px;
-      padding: 16px 20px;
-      box-shadow: 0 15px 35px rgba(0,0,0,0.5);
+      padding: 16px 18px;
+      box-shadow: 0 15px 35px rgba(0,0,0,0.6);
     }
 
-    .status-row {
+    .hud-title-bar {
       display: flex;
       justify-content: space-between;
       align-items: center;
-      margin-bottom: 8px;
+      margin-bottom: 10px;
     }
 
-    .road-title {
-      font-size: 1.35rem;
+    .road-name {
+      font-size: 1.3rem;
       font-weight: 800;
-      letter-spacing: -0.5px;
       color: #38bdf8;
     }
 
-    .live-badge {
+    .status-tag {
       display: flex;
       align-items: center;
       gap: 6px;
       font-size: 0.75rem;
-      background: rgba(34, 197, 94, 0.15);
-      color: #4ade80;
-      padding: 4px 10px;
+      background: rgba(16, 185, 129, 0.15);
+      color: var(--success);
+      padding: 5px 12px;
       border-radius: 20px;
-      border: 1px solid rgba(34, 197, 94, 0.3);
+      border: 1px solid rgba(16, 185, 129, 0.3);
+      font-weight: 600;
     }
 
     .pulse {
-      width: 6px;
-      height: 6px;
-      background: #4ade80;
+      width: 7px;
+      height: 7px;
+      background: var(--success);
       border-radius: 50%;
-      animation: pulseAnim 1.5s infinite;
+      animation: pulseAnim 1.4s infinite;
     }
 
     @keyframes pulseAnim {
-      0% { transform: scale(0.9); opacity: 0.7; }
+      0% { transform: scale(0.85); opacity: 0.6; }
       50% { transform: scale(1.4); opacity: 1; }
-      100% { transform: scale(0.9); opacity: 0.7; }
+      100% { transform: scale(0.85); opacity: 0.6; }
     }
 
-    .telemetry {
+    .telemetry-row {
       display: flex;
-      gap: 16px;
+      gap: 18px;
       font-size: 0.85rem;
       color: var(--text-muted);
-      font-weight: 500;
+      border-bottom: 1px solid var(--border);
+      padding-bottom: 10px;
+      margin-bottom: 10px;
     }
 
-    .telemetry span b { color: var(--text); }
+    .telemetry-row span b { color: var(--text); }
 
-    /* بطاقة التنبيه الأهم */
-    .ahead-alert {
-      margin-top: 12px;
-      background: rgba(239, 68, 68, 0.1);
-      border-right: 4px solid var(--danger);
-      padding: 10px 14px;
-      border-radius: 8px;
-      font-size: 0.9rem;
+    .ahead-summary {
       display: flex;
       justify-content: space-between;
       align-items: center;
+      font-size: 0.9rem;
+      cursor: pointer;
     }
 
-    /* مركز التحكم السفلي */
-    .bottom-panel {
+    .ahead-summary span b { color: #fca5a5; }
+
+    /* لوحة التحكم السفلية للرادار */
+    .hud-controls {
       position: relative;
       z-index: 2;
-      padding: 0 16px calc(env(safe-area-inset-bottom, 20px) + 16px) 16px;
+      padding: 0 16px 16px 16px;
       display: flex;
       flex-direction: column;
       align-items: center;
-      gap: 16px;
+      gap: 14px;
       pointer-events: none;
     }
 
-    .ptt-container {
+    .ptt-wrapper {
       pointer-events: auto;
       display: flex;
       flex-direction: column;
       align-items: center;
-      position: relative;
     }
 
-    .ptt-button {
-      width: 130px;
-      height: 130px;
+    .ptt-core {
+      width: 135px;
+      height: 135px;
       border-radius: 50%;
-      border: 2px solid rgba(255, 255, 255, 0.1);
-      background: radial-gradient(circle at 30% 30%, #0ea5e9, #0369a1);
+      border: 2px solid rgba(255, 255, 255, 0.12);
+      background: radial-gradient(circle at 30% 30%, #0284c7, #0369a1);
       box-shadow: 0 0 35px var(--accent-glow);
       display: flex;
       flex-direction: column;
@@ -165,40 +196,38 @@
       -webkit-tap-highlight-color: transparent;
     }
 
-    .ptt-button:active, .ptt-button.recording {
+    .ptt-core:active, .ptt-core.broadcasting {
       background: radial-gradient(circle at 30% 30%, #ef4444, #b91c1c);
-      box-shadow: 0 0 50px var(--danger-glow);
-      transform: scale(0.94);
+      box-shadow: 0 0 55px var(--danger-glow);
+      transform: scale(0.95);
     }
 
-    .ptt-button svg {
-      width: 42px;
-      height: 42px;
+    .ptt-core svg {
+      width: 44px;
+      height: 44px;
       fill: currentColor;
     }
 
-    .ptt-button span {
+    .ptt-core span {
       font-size: 0.85rem;
       font-weight: 700;
-      margin-top: 4px;
-      letter-spacing: 0.5px;
+      margin-top: 5px;
     }
 
-    /* أزرار البلاغ السريع بنقرة واحدة */
-    .action-grid {
+    .quick-report-strip {
       pointer-events: auto;
       display: grid;
       grid-template-columns: repeat(3, 1fr);
-      gap: 10px;
+      gap: 8px;
       width: 100%;
     }
 
-    .action-card {
+    .btn-quick {
       background: var(--card-bg);
-      backdrop-filter: blur(15px);
-      -webkit-backdrop-filter: blur(15px);
-      border: 1px solid rgba(255, 255, 255, 0.08);
-      padding: 14px 8px;
+      backdrop-filter: blur(18px);
+      -webkit-backdrop-filter: blur(18px);
+      border: 1px solid var(--border);
+      padding: 12px 6px;
       border-radius: 14px;
       color: #fff;
       font-size: 0.85rem;
@@ -206,82 +235,429 @@
       display: flex;
       flex-direction: column;
       align-items: center;
-      gap: 6px;
+      gap: 4px;
       cursor: pointer;
-      box-shadow: 0 4px 15px rgba(0,0,0,0.3);
+      box-shadow: 0 6px 16px rgba(0,0,0,0.3);
     }
 
-    .action-card:active {
-      background: rgba(255, 255, 255, 0.1);
-      transform: scale(0.97);
+    .btn-quick:active {
+      transform: scale(0.96);
+      background: rgba(255, 255, 255, 0.12);
     }
 
-    .action-card span.icon { font-size: 1.4rem; }
+    /* ===================================
+       2. شاشة بلاغات الطريق (Feed)
+       =================================== */
+    .page-title {
+      font-size: 1.5rem;
+      font-weight: 800;
+      margin-bottom: 6px;
+      color: var(--text);
+    }
+
+    .page-subtitle {
+      font-size: 0.85rem;
+      color: var(--text-muted);
+      margin-bottom: 20px;
+    }
+
+    .report-card {
+      background: var(--card-solid);
+      border: 1px solid var(--border);
+      border-radius: 16px;
+      padding: 16px;
+      margin-bottom: 12px;
+      display: flex;
+      flex-direction: column;
+      gap: 10px;
+    }
+
+    .report-top {
+      display: flex;
+      justify-content: space-between;
+      align-items: center;
+    }
+
+    .report-type {
+      font-size: 1rem;
+      font-weight: 700;
+      display: flex;
+      align-items: center;
+      gap: 8px;
+    }
+
+    .report-time {
+      font-size: 0.75rem;
+      color: var(--text-muted);
+    }
+
+    .report-body {
+      font-size: 0.9rem;
+      color: #cbd5e1;
+      line-height: 1.4;
+    }
+
+    .report-actions {
+      display: flex;
+      justify-content: space-between;
+      align-items: center;
+      border-top: 1px solid var(--border);
+      padding-top: 10px;
+    }
+
+    .vote-btn {
+      background: rgba(255, 255, 255, 0.05);
+      border: 1px solid var(--border);
+      color: var(--text);
+      padding: 6px 14px;
+      border-radius: 20px;
+      font-size: 0.8rem;
+      cursor: pointer;
+    }
+
+    .vote-btn.active {
+      background: var(--accent);
+      border-color: var(--accent);
+    }
+
+    /* ===================================
+       3. شاشة القوافل (Convoys)
+       =================================== */
+    .convoy-join-box {
+      background: var(--card-solid);
+      border: 1px solid var(--border);
+      padding: 18px;
+      border-radius: 16px;
+      margin-bottom: 20px;
+      display: flex;
+      flex-direction: column;
+      gap: 12px;
+    }
+
+    .convoy-input {
+      background: #07090e;
+      border: 1px solid var(--border);
+      color: #fff;
+      padding: 12px;
+      border-radius: 10px;
+      font-size: 1rem;
+      text-align: center;
+      letter-spacing: 2px;
+    }
+
+    .btn-action {
+      background: var(--accent);
+      color: #fff;
+      border: none;
+      padding: 12px;
+      border-radius: 10px;
+      font-weight: 700;
+      font-size: 0.95rem;
+      cursor: pointer;
+    }
+
+    /* ===================================
+       4. شاشة الإعدادات والملف الشخصي
+       =================================== */
+    .profile-card {
+      background: var(--card-solid);
+      border: 1px solid var(--border);
+      border-radius: 16px;
+      padding: 18px;
+      display: flex;
+      align-items: center;
+      gap: 16px;
+      margin-bottom: 20px;
+    }
+
+    .avatar {
+      width: 55px;
+      height: 55px;
+      background: #1e293b;
+      border-radius: 50%;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      font-size: 1.6rem;
+      border: 2px solid var(--accent);
+    }
+
+    .profile-info h3 {
+      font-size: 1.1rem;
+      font-weight: 700;
+    }
+
+    .profile-info p {
+      font-size: 0.8rem;
+      color: var(--text-muted);
+      margin-top: 3px;
+    }
+
+    .setting-group {
+      background: var(--card-solid);
+      border: 1px solid var(--border);
+      border-radius: 16px;
+      padding: 6px 16px;
+      margin-bottom: 16px;
+    }
+
+    .setting-item {
+      display: flex;
+      justify-content: space-between;
+      align-items: center;
+      padding: 14px 0;
+      border-bottom: 1px solid var(--border);
+      font-size: 0.9rem;
+    }
+
+    .setting-item:last-child {
+      border-bottom: none;
+    }
+
+    /* ===================================
+       شريط التنقل السفلي الموحد (Navigation Bar)
+       =================================== */
+    .bottom-navbar {
+      height: 75px;
+      background: rgba(11, 15, 25, 0.96);
+      backdrop-filter: blur(20px);
+      -webkit-backdrop-filter: blur(20px);
+      border-top: 1px solid var(--border);
+      display: grid;
+      grid-template-columns: repeat(4, 1fr);
+      position: fixed;
+      bottom: 0;
+      left: 0;
+      width: 100%;
+      z-index: 99;
+      padding-bottom: env(safe-area-inset-bottom, 10px);
+    }
+
+    .nav-tab {
+      display: flex;
+      flex-direction: column;
+      align-items: center;
+      justify-content: center;
+      color: var(--text-muted);
+      cursor: pointer;
+      transition: color 0.2s;
+      gap: 4px;
+    }
+
+    .nav-tab svg {
+      width: 24px;
+      height: 24px;
+      fill: currentColor;
+    }
+
+    .nav-tab span {
+      font-size: 0.72rem;
+      font-weight: 600;
+    }
+
+    .nav-tab.active {
+      color: var(--accent);
+    }
   </style>
 </head>
 <body>
 
-  <!-- خريطة الملاحة الحية المظلمة -->
-  <div id="map"></div>
+  <!-- ==================== 1. شاشة الرادار ==================== -->
+  <section class="app-screen active" id="screen-radar">
+    <div id="map"></div>
 
-  <!-- واجهة المعلومات العلوية -->
-  <div class="hud-overlay">
-    <div class="top-panel">
-      <div class="status-row">
-        <div class="road-title" id="roadName">طريق الملك فهد</div>
-        <div class="live-badge">
-          <div class="pulse"></div>
-          <span id="driversCount">14 سائق متصل</span>
+    <div class="hud-header">
+      <div class="hud-card">
+        <div class="hud-title-bar">
+          <div class="road-name" id="currentRoad">طريق الملك فهد</div>
+          <div class="status-tag">
+            <div class="pulse"></div>
+            <span id="driversAround">14 متصل حولك</span>
+          </div>
+        </div>
+        <div class="telemetry-row">
+          <span>السرعة: <b id="speedDisplay">0</b> كم/س</span>
+          <span>الاتجاه: <b id="headingDisplay">شمال</b></span>
+          <span>القناة: <b style="color: #38bdf8;">مسار سريع</b></span>
+        </div>
+        <div class="ahead-summary" onclick="switchTab('reports')">
+          <span>⚠️ <b>وش صاير قدام:</b> حادث بعد 700م (تأكيد 4 سائقين)</span>
+          <small style="color: var(--accent);">عرض ↗</small>
         </div>
       </div>
-      <div class="telemetry">
-        <span>السرعة: <b id="speedVal">0</b> كم/س</span>
-        <span>الاتجاه: <b id="headingVal">شمال</b></span>
-        <span>المسار: <b style="color: #38bdf8;">سالك</b></span>
-      </div>
-      <div class="ahead-alert" id="aheadBox">
-        <span>⚠️ <b>وش صاير قدام:</b> حركة سير طبيعية</span>
-        <small style="color: var(--text-muted);">محدث الآن</small>
-      </div>
-    </div>
-  </div>
-
-  <!-- واجهة التحكم والتحدث السفلية -->
-  <div class="bottom-panel">
-    <div class="ptt-container">
-      <button class="ptt-button" id="pttBtn">
-        <svg viewBox="0 0 24 24">
-          <path d="M12 14c1.66 0 3-1.34 3-3V5c0-1.66-1.34-3-3-3S9 3.34 9 5v6c0 1.66 1.34 3 3 3z"/>
-          <path d="M17 11c0 2.76-2.24 5-5 5s-5-2.24-5-5H5c0 3.53 2.61 6.43 6 6.92V21h2v-3.08c3.39-.49 6-3.39 6-6.92h-2z"/>
-        </svg>
-        <span id="pttText">اضغط وتحدث</span>
-      </button>
     </div>
 
-    <div class="action-grid">
-      <div class="action-card" onclick="postIncident('حادث أمامي')">
-        <span class="icon">💥</span>
-        <span>حادث</span>
+    <div class="hud-controls">
+      <div class="ptt-wrapper">
+        <button class="ptt-core" id="pttButton">
+          <svg viewBox="0 0 24 24">
+            <path d="M12 14c1.66 0 3-1.34 3-3V5c0-1.66-1.34-3-3-3S9 3.34 9 5v6c0 1.66 1.34 3 3 3z"/>
+            <path d="M17 11c0 2.76-2.24 5-5 5s-5-2.24-5-5H5c0 3.53 2.61 6.43 6 6.92V21h2v-3.08c3.39-.49 6-3.39 6-6.92h-2z"/>
+          </svg>
+          <span id="pttLabel">تحدث للقناة</span>
+        </button>
       </div>
-      <div class="action-card" onclick="postIncident('ازدحام شديد')">
-        <span class="icon">🛑</span>
-        <span>زحمة</span>
-      </div>
-      <div class="action-card" onclick="postIncident('عائق / تحويلة')">
-        <span class="icon">🚧</span>
-        <span>عائق</span>
+
+      <div class="quick-report-strip">
+        <div class="btn-quick" onclick="createReport('حادث مروري', 'المسار الأيسر مغلق بالكامل')">
+          <span style="font-size: 1.3rem;">💥</span>
+          <span>حادث</span>
+        </div>
+        <div class="btn-quick" onclick="createReport('ازدحام مفاجئ', 'توقف كامل لحركة السير')">
+          <span style="font-size: 1.3rem;">🛑</span>
+          <span>زحمة</span>
+        </div>
+        <div class="btn-quick" onclick="createReport('عائق أو تحويلة', 'أعمال صيانة أو حفريات')">
+          <span style="font-size: 1.3rem;">🚧</span>
+          <span>خطر</span>
+        </div>
       </div>
     </div>
-  </div>
+  </section>
 
-  <!-- سكربت الخرائط والصوت الحقيقي -->
+  <!-- ==================== 2. شاشة البلاغات والتأكيدات ==================== -->
+  <section class="app-screen" id="screen-reports">
+    <div class="page-title">أحداث مسارك</div>
+    <div class="page-subtitle">البلاغات المعتمدة والنشطة على نفس خط سيرك حالياً</div>
+    
+    <div id="reportsList">
+      <!-- بلاغ 1 -->
+      <div class="report-card">
+        <div class="report-top">
+          <div class="report-type" style="color: #ef4444;">💥 حادث مروري</div>
+          <div class="report-time">قبل دقيقة واحدة</div>
+        </div>
+        <div class="report-body">على بعد 700 متر، سيارتان في المسار الأيسر، يفضل التحرك للمسار الأيمن.</div>
+        <div class="report-actions">
+          <span style="font-size: 0.8rem; color: var(--text-muted);">المصدر: سائق كامري (موثوقية عالية)</span>
+          <button class="vote-btn" onclick="toggleConfirm(this)">👍 تأكيد (4)</button>
+        </div>
+      </div>
+
+      <!-- بلاغ 2 -->
+      <div class="report-card">
+        <div class="report-top">
+          <div class="report-type" style="color: #f59e0b;">🛑 ازدحام مفاجئ</div>
+          <div class="report-time">قبل 4 دقائق</div>
+        </div>
+        <div class="report-body">تباطؤ شديد يبدأ بعد المخرج القادم مباشرة باتجاه جسر المعلق.</div>
+        <div class="report-actions">
+          <span style="font-size: 0.8rem; color: var(--text-muted);">المصدر: كابتن فهد</span>
+          <button class="vote-btn" onclick="toggleConfirm(this)">👍 تأكيد (2)</button>
+        </div>
+      </div>
+    </div>
+  </section>
+
+  <!-- ==================== 3. شاشة القوافل والرحلات ==================== -->
+  <section class="app-screen" id="screen-convoys">
+    <div class="page-title">القوافل والرحلات المشتركة</div>
+    <div class="page-subtitle">أنشئ قناة اتصال خاصة بقافلتك أو انضم لقافلة أصدقائك في السفر</div>
+
+    <div class="convoy-join-box">
+      <div style="font-size: 0.9rem; font-weight: 700;">الانضمام لقافلة خاصة</div>
+      <input type="text" class="convoy-input" placeholder="ادخل رمز القافلة (مثال: KSA-99)" maxlength="10">
+      <button class="btn-action">دخول القناة الصوتية للقافلة</button>
+    </div>
+
+    <div class="convoy-join-box" style="border-style: dashed; background: transparent;">
+      <div style="font-size: 0.95rem; font-weight: 700;">إنشاء رحلة جديدة</div>
+      <p style="font-size: 0.8rem; color: var(--text-muted);">تتيح لك دعوة عدة سيارات للتواصل الصوتي المغلق ومتابعة خط السير معاً.</p>
+      <button class="btn-action" style="background: #1e293b; border: 1px solid var(--border);" onclick="alert('تم تجهيز القافلة برمز: RY-4402')">إنشاء رحلة الآن</button>
+    </div>
+  </section>
+
+  <!-- ==================== 4. شاشة الإعدادات والملف الشخصي ==================== -->
+  <section class="app-screen" id="screen-profile">
+    <div class="page-title">إعدادات السائق</div>
+    <div class="page-subtitle">التحكم في الخصوصية، الصوت، وحسابك في DarbLink</div>
+
+    <div class="profile-card">
+      <div class="avatar">🚗</div>
+      <div class="profile-info">
+        <h3 id="driverNameLabel">سائق DarbLink #18</h3>
+        <p>مستوى الموثوقية: ⭐⭐⭐ (عالية)</p>
+      </div>
+    </div>
+
+    <div class="setting-group">
+      <div class="setting-item">
+        <span>اسم العرض المستعار</span>
+        <input type="text" value="سائق DarbLink" style="background: transparent; border: none; color: var(--accent); text-align: left; font-weight: 600;" onchange="updateNick(this.value)">
+      </div>
+      <div class="setting-item">
+        <span>نطاق القناة الجغرافية</span>
+        <select style="background: transparent; border: none; color: #fff; font-weight: 600;">
+          <option>1 كم (الأقرب لمسارك)</option>
+          <option selected>3 كم (متوسط)</option>
+          <option>5 كم (للطرق السريعة)</option>
+        </select>
+      </div>
+    </div>
+
+    <div class="setting-group">
+      <div class="setting-item">
+        <span>كتم البلاغات غير المؤكدة</span>
+        <input type="checkbox">
+      </div>
+      <div class="setting-item">
+        <span>تنبيه اهتزاز عند البلاغات الخطرة</span>
+        <input type="checkbox" checked>
+      </div>
+      <div class="setting-item">
+        <span>وضع القيادة الآلي (Auto Driving Mode)</span>
+        <input type="checkbox" checked>
+      </div>
+    </div>
+  </section>
+
+  <!-- ==================== شريط التنقل السفلي ==================== -->
+  <nav class="bottom-navbar">
+    <div class="nav-tab active" onclick="switchTab('radar')">
+      <svg viewBox="0 0 24 24"><path d="M12 2C6.48 2 2 6.48 2 12s4.48 10 10 10 10-4.48 10-10S17.52 2 12 2zm-1 17.93c-3.95-.49-7-3.85-7-7.93 0-.62.08-1.21.21-1.79L9 15v1c0 1.1.9 2 2 2v1.93zm6.9-2.54c-.26-.81-1-1.39-1.9-1.39h-1v-3c0-.55-.45-1-1-1H8v-2h2c.55 0 1-.45 1-1V7h2c1.1 0 2-.9 2-2v-.41c2.93 1.19 5 4.06 5 7.41 0 2.08-.8 3.97-2.1 5.39z"/></svg>
+      <span>الرادار</span>
+    </div>
+
+    <div class="nav-tab" onclick="switchTab('reports')">
+      <svg viewBox="0 0 24 24"><path d="M12 22c1.1 0 2-.9 2-2h-4c0 1.1.9 2 2 2zm6-6v-5c0-3.07-1.63-5.64-4.5-6.32V4c0-.83-.67-1.5-1.5-1.5s-1.5.67-1.5 1.5v.68C7.64 5.36 6 7.92 6 11v5l-2 2v1h16v-1l-2-2zm-2 1H8v-6c0-2.48 1.51-4.5 4-4.5s4 2.02 4 4.5v6z"/></svg>
+      <span>البلاغات</span>
+    </div>
+
+    <div class="nav-tab" onclick="switchTab('convoys')">
+      <svg viewBox="0 0 24 24"><path d="M16 11c1.66 0 2.99-1.34 2.99-3S17.66 5 16 5c-1.66 0-3 1.34-3 3s1.34 3 3 3zm-8 0c1.66 0 2.99-1.34 2.99-3S9.66 5 8 5C6.34 5 5 6.34 5 3s1.34 3 3 3zm0 2c-2.33 0-7 1.17-7 3.5V19h14v-2.5c0-2.33-4.67-3.5-7-3.5zm8 0c-.29 0-.62.02-.97.05 1.16.84 1.97 1.97 1.97 3.45V19h6v-2.5c0-2.33-4.67-3.5-7-3.5z"/></svg>
+      <span>القوافل</span>
+    </div>
+
+    <div class="nav-tab" onclick="switchTab('profile')">
+      <svg viewBox="0 0 24 24"><path d="M12 12c2.21 0 4-1.79 4-4s-1.79-4-4-4-4 1.79-4 4 1.79 4 4 4zm0 2c-2.67 0-8 1.34-8 4v2h16v-2c0-2.66-5.33-4-8-4z"/></svg>
+      <span>الإعدادات</span>
+    </div>
+  </nav>
+
+  <!-- Leaflet Map Script -->
   <script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js"></script>
+
   <script>
-    // إعداد الخريطة في وضع الليل المظلم
+    // التنقل بين التبويبات والشاشات
+    function switchTab(screenName) {
+      document.querySelectorAll('.app-screen').forEach(s => s.classList.remove('active'));
+      document.querySelectorAll('.nav-tab').forEach(t => t.classList.remove('active'));
+
+      document.getElementById('screen-' + screenName).classList.add('active');
+      
+      const tabIndex = { 'radar': 0, 'reports': 1, 'convoys': 2, 'profile': 3 }[screenName];
+      document.querySelectorAll('.nav-tab')[tabIndex].classList.add('active');
+
+      if(screenName === 'radar' && window.map) {
+        setTimeout(() => map.invalidateSize(), 150);
+      }
+    }
+
+    // إعداد الخريطة
     const map = L.map('map', { zoomControl: false, attributionControl: false }).setView([24.7136, 46.6753], 15);
     L.tileLayer('https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png', { maxZoom: 18 }).addTo(map);
 
-    let userMarker = L.circleMarker([24.7136, 46.6753], {
+    let userPosMarker = L.circleMarker([24.7136, 46.6753], {
       radius: 9,
       fillColor: '#38bdf8',
       color: '#ffffff',
@@ -289,31 +665,31 @@
       fillOpacity: 1
     }).addTo(map);
 
-    // تتبع الحركة المباشرة بدقة عبر GPS الهاتف
+    // تتبع الموقع الجغرافي والسرعة والاتجاه الحقيقي
     if ("geolocation" in navigator) {
       navigator.geolocation.watchPosition((pos) => {
         const lat = pos.coords.latitude;
         const lng = pos.coords.longitude;
         const speed = pos.coords.speed ? Math.round(pos.coords.speed * 3.6) : 0;
         
-        document.getElementById('speedVal').innerText = speed;
-        userMarker.setLatLng([lat, lng]);
+        document.getElementById('speedDisplay').innerText = speed;
+        userPosMarker.setLatLng([lat, lng]);
         map.panTo([lat, lng]);
 
         if (pos.coords.heading) {
           const h = pos.coords.heading;
-          let dirText = 'شمال';
-          if (h > 45 && h <= 135) dirText = 'شرق';
-          else if (h > 135 && h <= 225) dirText = 'جنوب';
-          else if (h > 225 && h <= 315) dirText = 'غرب';
-          document.getElementById('headingVal').innerText = dirText;
+          let dir = 'شمال';
+          if (h > 45 && h <= 135) dir = 'شرق';
+          else if (h > 135 && h <= 225) dir = 'جنوب';
+          else if (h > 225 && h <= 315) dir = 'غرب';
+          document.getElementById('headingDisplay').innerText = dir;
         }
       }, (err) => console.log(err), { enableHighAccuracy: true });
     }
 
-    // إدارة تسجيل وبث الصوت PTT
-    const pttBtn = document.getElementById('pttBtn');
-    const pttText = document.getElementById('pttText');
+    // زر التحدث اللاسلكي PTT
+    const pttButton = document.getElementById('pttButton');
+    const pttLabel = document.getElementById('pttLabel');
     let recorder;
     let chunks = [];
 
@@ -324,38 +700,63 @@
         const blob = new Blob(chunks, { type: 'audio/mp4' });
         chunks = [];
         const audio = new Audio(URL.createObjectURL(blob));
-        audio.play(); // تشغيل فوري للتجربة الذاتية
+        audio.play(); // تشغيل فوري للتأكد من التقاط الصوت
       };
-    }).catch(e => console.log('Mic restricted'));
+    }).catch(e => console.log('صلاحية الميكروفون بانتظار الإذن'));
 
-    const startTalk = (e) => {
+    const startBroadcast = (e) => {
       e.preventDefault();
       if (recorder && recorder.state === 'inactive') {
         chunks = [];
         recorder.start();
-        pttBtn.classList.add('recording');
-        pttText.innerText = 'بث حي...';
+        pttButton.classList.add('broadcasting');
+        pttLabel.innerText = 'جاري البث...';
         if (navigator.vibrate) navigator.vibrate(60);
       }
     };
 
-    const stopTalk = (e) => {
+    const endBroadcast = (e) => {
       e.preventDefault();
       if (recorder && recorder.state === 'recording') {
         recorder.stop();
-        pttBtn.classList.remove('recording');
-        pttText.innerText = 'اضغط وتحدث';
+        pttButton.classList.remove('broadcasting');
+        pttLabel.innerText = 'تحدث للقناة';
       }
     };
 
-    pttBtn.addEventListener('touchstart', startTalk);
-    pttBtn.addEventListener('touchend', stopTalk);
-    pttBtn.addEventListener('mousedown', startTalk);
-    pttBtn.addEventListener('mouseup', stopTalk);
+    pttButton.addEventListener('touchstart', startBroadcast);
+    pttButton.addEventListener('touchend', endBroadcast);
+    pttButton.addEventListener('mousedown', startBroadcast);
+    pttButton.addEventListener('mouseup', endBroadcast);
 
-    function postIncident(type) {
-      document.getElementById('aheadBox').innerHTML = `<span>🚨 <b>تنبيه من السائقين:</b> ${type} بعد 600م</span>`;
-      if (navigator.vibrate) navigator.vibrate([120, 80, 120]);
+    // إضافة بلاغ جديد في القائمة
+    function createReport(title, desc) {
+      const reportsContainer = document.getElementById('reportsList');
+      const newCard = document.createElement('div');
+      newCard.className = 'report-card';
+      newCard.innerHTML = `
+        <div class="report-top">
+          <div class="report-type" style="color: #ef4444;">💥 ${title}</div>
+          <div class="report-time">الآن</div>
+        </div>
+        <div class="report-body">${desc}</div>
+        <div class="report-actions">
+          <span style="font-size: 0.8rem; color: var(--text-muted);">المصدر: أنت (بلاغ مباشر)</span>
+          <button class="vote-btn active">👍 تم الإرسال</button>
+        </div>
+      `;
+      reportsContainer.prepend(newCard);
+      alert('تم بث البلاغ بنجاح للسائقين في مسارك!');
+      if (navigator.vibrate) navigator.vibrate([100, 50, 100]);
+    }
+
+    function toggleConfirm(btn) {
+      btn.classList.toggle('active');
+      btn.innerText = btn.classList.contains('active') ? '👍 تم التأكيد (5)' : '👍 تأكيد (4)';
+    }
+
+    function updateNick(val) {
+      document.getElementById('driverNameLabel').innerText = val;
     }
   </script>
 </body>
