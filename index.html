@@ -1,0 +1,132 @@
+<!DOCTYPE html>
+<html lang="ar" dir="rtl">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
+  <title>DarbLink</title>
+  <style>
+    * { box-sizing: border-box; font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif; margin: 0; padding: 0; }
+    body { background: #0b0f19; color: #f8fafc; display: flex; flex-direction: column; height: 100vh; justify-content: space-between; padding: 24px 16px; }
+    
+    .header { background: #131b2e; border: 1px solid #1e293b; padding: 18px; border-radius: 16px; text-align: center; }
+    .road-tag { font-size: 1.3rem; font-weight: 800; color: #38bdf8; letter-spacing: -0.5px; }
+    .status-sub { font-size: 0.85rem; color: #94a3b8; margin-top: 6px; display: flex; justify-content: center; gap: 12px; }
+    .live-dot { width: 8px; height: 8px; background: #22c55e; border-radius: 50%; display: inline-block; }
+    
+    .alert-banner { margin-top: 14px; background: rgba(239, 68, 68, 0.12); border: 1px solid #ef4444; border-radius: 10px; padding: 10px 14px; font-size: 0.95rem; color: #fca5a5; }
+    
+    .center-action { display: flex; flex-direction: column; align-items: center; justify-content: center; }
+    .ptt-wrapper { position: relative; }
+    .ptt-btn { width: 170px; height: 170px; border-radius: 50%; border: none; background: linear-gradient(135deg, #2563eb, #1d4ed8); color: #fff; font-size: 1.2rem; font-weight: bold; display: flex; flex-direction: column; align-items: center; justify-content: center; gap: 6px; box-shadow: 0 10px 30px rgba(37, 99, 235, 0.4); cursor: pointer; -webkit-tap-highlight-color: transparent; transition: 0.15s; }
+    .ptt-btn:active, .ptt-btn.talking { background: linear-gradient(135deg, #ef4444, #dc2626); box-shadow: 0 0 35px rgba(239, 68, 68, 0.7); transform: scale(0.96); }
+    .ptt-btn span.mic-icon { font-size: 2.2rem; }
+    
+    .quick-bar { width: 100%; display: grid; grid-template-columns: repeat(3, 1fr); gap: 8px; margin-top: 24px; }
+    .btn-alert { background: #1e293b; border: 1px solid #334155; color: #f1f5f9; padding: 14px 6px; border-radius: 12px; font-size: 0.9rem; font-weight: 700; cursor: pointer; }
+    .btn-alert:active { background: #334155; }
+    
+    .footer-telemetry { text-align: center; font-size: 0.8rem; color: #64748b; background: #0f172a; padding: 10px; border-radius: 8px; border: 1px solid #1e293b; }
+  </style>
+</head>
+<body>
+
+  <div class="header">
+    <div class="road-tag" id="roadName">طريق رئيسي (متصل)</div>
+    <div class="status-sub">
+      <span><i class="live-dot"></i> مباشر</span>
+      <span id="nearbyUsers">🚗 8 سائقين قريبين</span>
+    </div>
+    <div class="alert-banner" id="mainAlert">
+      ⚠️ لا توجد عوائق مسجلة أمامك
+    </div>
+  </div>
+
+  <div class="center-action">
+    <div class="ptt-wrapper">
+      <button class="ptt-btn" id="pttButton">
+        <span class="mic-icon">🎙️</span>
+        <span id="pttStatus">اضغط للتحدث</span>
+      </button>
+    </div>
+    
+    <div class="quick-bar">
+      <button class="btn-alert" onclick="triggerAlert('حادث مروري')">⚠️ حادث</button>
+      <button class="btn-alert" onclick="triggerAlert('ازدحام مفاجئ')">🛑 زحمة</button>
+      <button class="btn-alert" onclick="triggerAlert('أشغال/عائق')">🚧 خطر</button>
+    </div>
+  </div>
+
+  <div class="footer-telemetry" id="gpsData">
+    GPS: بانتظار إشارة الموقع والسرعة...
+  </div>
+
+  <script>
+    const pttBtn = document.getElementById('pttButton');
+    const pttStatus = document.getElementById('pttStatus');
+    const gpsData = document.getElementById('gpsData');
+    const mainAlert = document.getElementById('mainAlert');
+
+    let mediaRecorder;
+    let audioChunks = [];
+
+    // قراءة نظام التموضع والسرعة للحركة الواقعية
+    if ("geolocation" in navigator) {
+      navigator.geolocation.watchPosition((pos) => {
+        const speedKmh = pos.coords.speed ? (pos.coords.speed * 3.6).toFixed(0) : 0;
+        const heading = pos.coords.heading ? Math.round(pos.coords.heading) : '--';
+        gpsData.innerText = `السرعة: ${speedKmh} كم/س | الاتجاه: ${heading}°`;
+      }, (err) => {
+        gpsData.innerText = 'يرجى تفعيل صلاحية الموقع لقراءة المسار';
+      }, { enableHighAccuracy: true });
+    }
+
+    // إعداد الميكروفون
+    if (navigator.mediaDevices && navigator.mediaDevices.getUserMedia) {
+      navigator.mediaDevices.getUserMedia({ audio: true }).then(stream => {
+        mediaRecorder = new MediaRecorder(stream);
+        mediaRecorder.ondataavailable = e => audioChunks.push(e.data);
+        mediaRecorder.onstop = () => {
+          const blob = new Blob(audioChunks, { type: 'audio/webm' });
+          audioChunks = [];
+          const audioUrl = URL.createObjectURL(blob);
+          const audio = new Audio(audioUrl);
+          audio.play(); // تشغيل فوري للتأكد من نجاح الإرسال التجريبي
+        };
+      }).catch(err => {
+        console.warn("الميكروفون غير مفعل أو غير مسموح");
+      });
+    }
+
+    // دعم الضغط واللمس للـ PTT
+    const startAudio = (e) => {
+      e.preventDefault();
+      if (mediaRecorder && mediaRecorder.state === 'inactive') {
+        audioChunks = [];
+        mediaRecorder.start();
+        pttBtn.classList.add('talking');
+        pttStatus.innerText = 'جاري الإرسال...';
+        if (navigator.vibrate) navigator.vibrate(50);
+      }
+    };
+
+    const stopAudio = (e) => {
+      e.preventDefault();
+      if (mediaRecorder && mediaRecorder.state === 'recording') {
+        mediaRecorder.stop();
+        pttBtn.classList.remove('talking');
+        pttStatus.innerText = 'اضغط للتحدث';
+      }
+    };
+
+    pttBtn.addEventListener('touchstart', startAudio);
+    pttBtn.addEventListener('touchend', stopAudio);
+    pttBtn.addEventListener('mousedown', startAudio);
+    pttBtn.addEventListener('mouseup', stopAudio);
+
+    function triggerAlert(title) {
+      mainAlert.innerText = `🚨 تنبيه وارد: ${title} على مسارك!`;
+      if (navigator.vibrate) navigator.vibrate([100, 50, 100]);
+    }
+  </script>
+</body>
+</html>
